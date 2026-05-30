@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates xml:space="preserve">
+
+    <t t-name="odoo_ai_assistant.ChatWidget" owl="1">
+        <div class="o_ai_chat">
+
+            <!-- Toolbar -->
+            <div class="o_ai_toolbar">
+                <span class="o_ai_title">AI Assistant</span>
+
+                <!-- 供應商切換（每題獨立；未設金鑰會標示）-->
+                <select class="o_ai_select" t-on-change="onProviderChange">
+                    <t t-foreach="state.providers" t-as="p" t-key="p.value">
+                        <option t-att-value="p.value" t-att-selected="p.value === state.provider">
+                            <t t-esc="p.label"/><t t-if="!p.has_key"> (未設金鑰)</t>
+                        </option>
+                    </t>
+                </select>
+
+                <!-- 模型切換：有選項用下拉，Ollama 等自由輸入用 text -->
+                <select t-if="currentModels.length" class="o_ai_select" t-on-change="onModelChange">
+                    <t t-foreach="currentModels" t-as="m" t-key="m.value">
+                        <option t-att-value="m.value" t-att-selected="m.value === state.model">
+                            <t t-esc="m.label"/>
+                        </option>
+                    </t>
+                </select>
+                <input t-else="" type="text" class="o_ai_select"
+                       t-att-value="state.model" t-on-change="onModelChange"
+                       placeholder="模型名稱"/>
+
+                <span class="o_ai_current_model">
+                    <t t-esc="'目前：' + state.model"/>
+                    <t t-if="!currentHasKey"> ⚠ 尚未設定金鑰</t>
+                </span>
+
+                <label class="o_ai_toggle">
+                    <input type="checkbox" t-model="state.useRag"/> RAG
+                </label>
+                <label class="o_ai_toggle">
+                    <input type="checkbox" t-model="state.useTools"/> Tools
+                </label>
+            </div>
+
+            <!-- Message list -->
+            <div class="o_ai_messages" t-ref="messages">
+                <t t-foreach="state.messages" t-as="msg" t-key="msg_index">
+                    <div t-attf-class="o_ai_message o_ai_message_{{msg.role}}">
+                        <div class="o_ai_message_role">
+                            <t t-if="msg.role === 'user'">You</t>
+                            <t t-elif="msg.role === 'assistant'">AI<t t-if="msg.model"> · <t t-esc="msg.model"/></t></t>
+                            <t t-else="">Error</t>
+                        </div>
+                        <div class="o_ai_message_content">
+                            <t t-esc="msg.content"/>
+                        </div>
+                    </div>
+                </t>
+
+                <t t-if="state.loading">
+                    <div class="o_ai_message o_ai_message_assistant o_ai_loading">
+                        <span>AI is thinking…</span>
+                    </div>
+                </t>
+            </div>
+
+            <!-- Input area -->
+            <div class="o_ai_input_area">
+                <textarea
+                    class="o_ai_input"
+                    t-model="state.prompt"
+                    t-on-keydown="onKeyDown"
+                    placeholder="Ask AI… (Enter to send, Shift+Enter for newline)"
+                    rows="2"
+                />
+                <button
+                    class="o_ai_send_btn btn btn-primary"
+                    t-on-click="sendMessage"
+                    t-att-disabled="state.loading"
+                >
+                    Send
+                </button>
+            </div>
+
+        </div>
+    </t>
+
+</templates>

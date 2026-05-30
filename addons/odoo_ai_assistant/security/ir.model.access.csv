@@ -1,0 +1,13 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_ai_chat_user,access_ai_chat_user,model_ai_chat,base.group_user,1,1,1,1
+access_ai_chat_manager,access_ai_chat_manager,model_ai_chat,base.group_system,1,1,1,1
+access_ai_document_user,access_ai_document_user,model_ai_document,base.group_user,1,0,0,0
+access_ai_document_manager,access_ai_document_manager,model_ai_document,base.group_system,1,1,1,1
+access_ai_settings_manager,access_ai_settings_manager,model_ai_settings,base.group_system,1,1,1,1
+access_stock_quote_user,access_stock_quote_user,model_stock_quote,base.group_user,1,0,0,0
+access_stock_quote_manager,access_stock_quote_manager,model_stock_quote,base.group_system,1,1,1,1
+access_stock_watchlist_user,access_stock_watchlist_user,model_stock_watchlist,base.group_user,1,1,1,1
+access_ai_knowledge_source_user,access_ai_knowledge_source_user,model_ai_knowledge_source,base.group_user,1,0,0,0
+access_ai_knowledge_source_manager,access_ai_knowledge_source_manager,model_ai_knowledge_source,base.group_system,1,1,1,1
+access_ai_model_user,access_ai_model_user,model_ai_model,base.group_user,1,0,0,0
+access_ai_model_manager,access_ai_model_manager,model_ai_model,base.group_system,1,1,1,1

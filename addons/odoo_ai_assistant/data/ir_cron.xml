@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            每日台股向量庫更新。
+            Odoo cron 的 nextcall 以 UTC 計算：台灣 18:00 = UTC 10:00。
+            首次安裝時 nextcall 設在過去，排程會在第一次 tick 立即補跑一次，
+            之後每日於 UTC 10:00 執行。
+        -->
+        <record id="ir_cron_daily_stock_digest" model="ir.cron">
+            <field name="name">每日台股向量庫更新（台灣 18:00）</field>
+            <field name="model_id" ref="model_ai_document"/>
+            <field name="state">code</field>
+            <field name="code">model.cron_build_daily_digest()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">days</field>
+            <field name="numbercall">-1</field>
+            <field name="nextcall">2026-01-01 10:00:00</field>
+            <field name="active" eval="True"/>
+        </record>
+
+    </data>
+</odoo>

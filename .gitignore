@@ -1,0 +1,52 @@
+# ---------- Python ----------
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# ---------- Odoo runtime data (machine-specific) ----------
+# docker-compose mounts ./odoo as Odoo /var/lib/odoo (filestore, sessions, cache)
+/odoo/
+*.log
+sessions/
+filestore/
+
+# ---------- Database / backups ----------
+backup_*.sql
+*.dump
+*.sqlite
+*.sqlite3
+
+# ---------- Secrets / env ----------
+.env
+.env.*
+*.key
+*.pem
+*credentials*
+*secret*
+
+# ---------- Editors / IDE ----------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+# Keep .devcontainer/ (shared dev container config)
+
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Claude Code ----------
+.claude/settings.local.json
+.claude/*.local.json

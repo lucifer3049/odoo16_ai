@@ -1,0 +1,30 @@
+services:
+  db:
+    # pgvector/pgvector 內建 vector extension（RAG 向量檢索用）
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+    ports:
+      - "5444:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    image: odoo16-ai
+    depends_on:
+      - db
+    ports:
+      - "8069:8069"
+    volumes:
+      - ./addons:/mnt/extra-addons
+      - ./odoo:/var/lib/odoo
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: odoo
+
+volumes:
+  postgres_data:

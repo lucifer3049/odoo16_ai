@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- Client action: renders the Owl Chat widget -->
+    <record id="action_ai_chat" model="ir.actions.client">
+        <field name="name">AI Chat</field>
+        <field name="tag">ai_chat_widget</field>
+    </record>
+
+    <!-- List view for chat history -->
+    <record id="view_ai_chat_list" model="ir.ui.view">
+        <field name="name">ai.chat.tree</field>
+        <field name="model">ai.chat</field>
+        <field name="arch" type="xml">
+            <tree string="我的提問紀錄"
+                  decoration-danger="status == 'error'"
+                  decoration-muted="status == 'pending'">
+                <field name="create_date"/>
+                <field name="user_id"/>
+                <field name="prompt"/>
+                <field name="model_used"/>
+                <field name="status"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form view -->
+    <record id="view_ai_chat_form" model="ir.ui.view">
+        <field name="name">ai.chat.form</field>
+        <field name="model">ai.chat</field>
+        <field name="arch" type="xml">
+            <form string="提問紀錄">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="user_id"/>
+                            <field name="create_date"/>
+                        </group>
+                        <group>
+                            <field name="model_used"/>
+                            <field name="status"/>
+                        </group>
+                    </group>
+                    <group string="問題">
+                        <field name="prompt" nolabel="1"/>
+                    </group>
+                    <group string="AI 回覆">
+                        <field name="response" nolabel="1" readonly="1"/>
+                    </group>
+                    <group string="錯誤訊息"
+                           attrs="{'invisible': [('status','!=','error')]}">
+                        <field name="error_message" nolabel="1" readonly="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search view: 篩選舊/新問題、狀態、模型 -->
+    <record id="view_ai_chat_search" model="ir.ui.view">
+        <field name="name">ai.chat.search</field>
+        <field name="model">ai.chat</field>
+        <field name="arch" type="xml">
+            <search string="搜尋提問">
+                <field name="prompt" string="問題內容"/>
+                <field name="response" string="回覆內容"/>
+                <field name="model_used"/>
+                <filter name="my_questions" string="我的提問"
+                        domain="[('user_id','=',uid)]"/>
+                <separator/>
+                <filter name="today" string="今天"
+                        domain="[('create_date','>=', (context_today()).strftime('%Y-%m-%d 00:00:00'))]"/>
+                <filter name="last_7_days" string="近 7 天"
+                        domain="[('create_date','>=', (context_today() + relativedelta(days=-7)).strftime('%Y-%m-%d 00:00:00'))]"/>
+                <separator/>
+                <filter name="status_done" string="已完成"
+                        domain="[('status','=','done')]"/>
+                <filter name="status_error" string="錯誤"
+                        domain="[('status','=','error')]"/>
+                <group expand="0" string="分組">
+                    <filter name="group_status" string="狀態"
+                            context="{'group_by':'status'}"/>
+                    <filter name="group_model" string="使用模型"
+                            context="{'group_by':'model_used'}"/>
+                    <filter name="group_date" string="建立日期"
+                            context="{'group_by':'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_ai_chat_history" model="ir.actions.act_window">
+        <field name="name">提問紀錄</field>
+        <field name="res_model">ai.chat</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="view_ai_chat_search"/>
+        <field name="context">{'search_default_my_questions': 1}</field>
+    </record>
+
+    <!-- Root menu -->
+    <menuitem
+        id="menu_ai_root"
+        name="AI Assistant"
+        sequence="100"
+    />
+
+    <!-- AI Chat (Owl UI) -->
+    <menuitem
+        id="menu_ai_chat"
+        name="AI Chat"
+        parent="menu_ai_root"
+        action="action_ai_chat"
+        sequence="10"
+    />
+
+    <!-- 提問紀錄（問題管理頁） -->
+    <menuitem
+        id="menu_ai_history"
+        name="提問紀錄"
+        parent="menu_ai_root"
+        action="action_ai_chat_history"
+        sequence="20"
+    />
+
+</odoo>

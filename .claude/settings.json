@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:openapi.twse.com.tw)",
+      "Bash(docker restart *)",
+      "PowerShell(Get-ChildItem d:\\\\Odoo16_LLM\\\\addons\\\\odoo_ai_assistant -Recurse | Where-Object { !$_.PSIsContainer } | Select-Object FullName)",
+      "Bash(gh auth *)",
+      "PowerShell(gh auth status 2>&1)",
+      "PowerShell(Head 30)",
+      "WebSearch",
+      "WebFetch(domain:ai.google.dev)",
+      "Bash(python -m py_compile addons/odoo_ai_assistant/models/ai_document.py addons/odoo_ai_assistant/models/ai_settings.py addons/odoo_ai_assistant/services/embedding_service.py addons/odoo_ai_assistant/services/twse_service.py addons/odoo_ai_assistant/services/market_digest_service.py addons/odoo_ai_assistant/services/llm_service.py addons/odoo_ai_assistant/services/prompt_service.py addons/odoo_ai_assistant/controllers/main.py)",
+      "Bash(python -c \"import xml.dom.minidom as m; [m.parse\\(f\\) for f in ['addons/odoo_ai_assistant/data/ir_cron.xml','addons/odoo_ai_assistant/views/stock_views.xml']]; print\\('XML_OK'\\)\")",
+      "Bash(python -m py_compile addons/odoo_ai_assistant/models/knowledge_source.py addons/odoo_ai_assistant/models/ai_document.py addons/odoo_ai_assistant/services/document_loader_service.py)",
+      "Bash(python -c \"import xml.dom.minidom as m; m.parse\\('addons/odoo_ai_assistant/views/stock_views.xml'\\); print\\('XML_OK'\\)\")",
+      "Bash(python -m py_compile addons/odoo_ai_assistant/services/document_loader_service.py addons/odoo_ai_assistant/models/ai_settings.py addons/odoo_ai_assistant/controllers/main.py)",
+      "Bash(python -c \"import xml.dom.minidom as m; [m.parse\\(f\\) for f in ['addons/odoo_ai_assistant/views/ai_chat_views.xml','addons/odoo_ai_assistant/views/stock_views.xml','addons/odoo_ai_assistant/static/src/xml/chat_widget.xml']]; print\\('XML_OK'\\)\")",
+      "Bash(python -m py_compile addons/odoo_ai_assistant/models/ai_settings.py addons/odoo_ai_assistant/controllers/main.py)",
+      "Bash(python -c \"import xml.dom.minidom as m; [m.parse\\(f\\) for f in ['addons/odoo_ai_assistant/views/stock_views.xml','addons/odoo_ai_assistant/static/src/xml/chat_widget.xml']]; print\\('XML_OK'\\)\")",
+      "Bash(python -m py_compile addons/odoo_ai_assistant/models/llm_model.py addons/odoo_ai_assistant/models/ai_settings.py addons/odoo_ai_assistant/controllers/main.py)",
+      "Bash(python -c \"import xml.dom.minidom as m; [m.parse\\(f\\) for f in ['addons/odoo_ai_assistant/data/ai_model_data.xml','addons/odoo_ai_assistant/views/stock_views.xml','addons/odoo_ai_assistant/views/ai_chat_views.xml']]; print\\('XML_OK'\\)\")",
+      "Bash(python -m py_compile addons/odoo_ai_assistant/migrations/16.0.1.1.0/post-migration.py)",
+      "PowerShell($errors = $null; [System.Management.Automation.Language.Parser]::ParseFile\\(\"d:\\\\Odoo16_LLM\\\\upgrade.ps1\", [ref]$null, [ref]$errors\\); if \\($errors.Count -eq 0\\) { \"PARSE_OK\" } else { $errors | ForEach-Object { $_.Message } })",
+      "Bash(python -c \"import odoo; print\\('odoo OK', odoo.__file__\\)\")",
+      "Bash(python -c \"import openai; print\\('openai OK'\\)\")",
+      "Bash(python -c \"import yaml; yaml.safe_load\\(open\\('docker-compose.yml'\\)\\); print\\('YAML_OK'\\)\")",
+      "Bash(python -c \"import json,re; s=open\\('.devcontainer/devcontainer.json',encoding='utf-8'\\).read\\(\\); s=re.sub\\(r'//.*','',s\\); json.loads\\(s\\); print\\('DEVCONTAINER_JSON_OK'\\)\")",
+      "Bash(grep -n \"## 一鍵升級\\\\|## AI 供應商與模型\\\\|## 開發環境\\\\|itzhaki\\\\|changed$\" README.md)",
+      "Bash(grep -E \"__pycache__|\\\\.pyc$|\\\\.sqlite|/odoo/|\\\\.log$|backup_\")",
+      "Bash(git add *)",
+      "Bash(git check-ignore *)",
+      "Bash(grep -E \"__pycache__|\\\\.pyc$\")",
+      "Bash(xargs git rm --cached --quiet)",
+      "Bash(grep -E \"__pycache__|\\\\.pyc$|/odoo/|settings\\\\.local\")",
+      "Bash(git rm *)",
+      "Bash(grep -E \"__pycache__|\\\\.pyc$|/odoo/|settings\\\\.local|\\\\.env$|\\\\.log$\")",
+      "Bash(grep -E \"__pycache__|\\\\.pyc$|^odoo/|settings\\\\.local|\\\\.env$|\\\\.log$|filestore|sessions\")",
+      "Bash(git checkout *)",
+      "Bash(grep -E \"__pycache__|\\\\.pyc$|^odoo/|settings\\\\.local|\\\\.env$|filestore|sessions\")"
+    ]
+  }
+}

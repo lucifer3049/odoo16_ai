@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- ── stock.quote ─────────────────────────────────────────── -->
+
+    <record id="view_stock_quote_list" model="ir.ui.view">
+        <field name="name">stock.quote.tree</field>
+        <field name="model">stock.quote</field>
+        <field name="arch" type="xml">
+            <tree string="即時行情快取">
+                <field name="stock_no"/>
+                <field name="name"/>
+                <field name="market"/>
+                <field name="price"/>
+                <field name="yesterday_close"/>
+                <field name="volume"/>
+                <field name="quote_time"/>
+                <field name="write_date"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="action_stock_quote" model="ir.actions.act_window">
+        <field name="name">行情快取</field>
+        <field name="res_model">stock.quote</field>
+        <field name="view_mode">list</field>
+    </record>
+
+    <!-- ── stock.watchlist ─────────────────────────────────────── -->
+
+    <record id="view_stock_watchlist_list" model="ir.ui.view">
+        <field name="name">stock.watchlist.tree</field>
+        <field name="model">stock.watchlist</field>
+        <field name="arch" type="xml">
+            <tree string="自選股" editable="top">
+                <field name="sequence" widget="handle"/>
+                <field name="stock_no"/>
+                <field name="name"/>
+                <field name="note"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="action_stock_watchlist" model="ir.actions.act_window">
+        <field name="name">自選股</field>
+        <field name="res_model">stock.watchlist</field>
+        <field name="view_mode">list</field>
+        <field name="domain">[('user_id','=',uid)]</field>
+    </record>
+
+    <!-- ── ai.settings ─────────────────────────────────────────── -->
+
+    <record id="view_ai_settings_form" model="ir.ui.view">
+        <field name="name">ai.settings.form</field>
+        <field name="model">ai.settings</field>
+        <field name="arch" type="xml">
+            <form string="AI 設定">
+                <header>
+                    <button name="action_rebuild_today_digest" type="object"
+                            string="立即更新今日向量庫" class="btn-primary"/>
+                    <button name="action_reindex_all_sources" type="object"
+                            string="整批重新索引所有來源"/>
+                    <button name="action_reindex_manual_docs" type="object"
+                            string="重建手動文件向量"/>
+                </header>
+                <sheet>
+                    <group string="基本">
+                        <field name="name"/>
+                        <field name="provider" string="預設供應商"/>
+                        <field name="temperature"/>
+                    </group>
+                    <div class="text-muted" style="margin: 4px 0 12px;">
+                        下方各家金鑰可「同時填寫」並長期保存；在 AI Chat 內可逐題自由切換要用哪一家模型，
+                        切換不會改動這裡的預設供應商。
+                    </div>
+
+                    <group string="API 金鑰（多家可同時設定）">
+                        <field name="openai_api_key" password="True"/>
+                        <field name="gemini_api_key" password="True"/>
+                        <field name="claude_api_key" password="True"/>
+                        <field name="groq_api_key" password="True"/>
+                        <field name="ollama_host"/>
+                    </group>
+
+                    <div class="text-muted" style="margin: 4px 0 12px;">
+                        模型清單由「<b>AI 模型清單</b>」選單管理，可自行增刪改、對齊市面任何模型；
+                        每家標記為「預設模型」者，會在未指定時自動採用。
+                    </div>
+
+                    <group string="System Prompt 覆寫">
+                        <field name="system_prompt" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_ai_settings" model="ir.actions.act_window">
+        <field name="name">AI 設定</field>
+        <field name="res_model">ai.settings</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ── ai.knowledge.source（上傳檔案 → 向量庫）─────────────── -->
+
+    <record id="view_ai_knowledge_source_list" model="ir.ui.view">
+        <field name="name">ai.knowledge.source.tree</field>
+        <field name="model">ai.knowledge.source</field>
+        <field name="arch" type="xml">
+            <tree string="知識庫來源">
+                <field name="name"/>
+                <field name="file_name"/>
+                <field name="status"/>
+                <field name="chunk_count"/>
+                <field name="create_date"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_ai_knowledge_source_form" model="ir.ui.view">
+        <field name="name">ai.knowledge.source.form</field>
+        <field name="model">ai.knowledge.source</field>
+        <field name="arch" type="xml">
+            <form string="知識庫來源">
+                <header>
+                    <button name="action_index" type="object"
+                            string="解析並建立索引" class="btn-primary"
+                            attrs="{'invisible': [('status','=','indexed')]}"/>
+                    <button name="action_reindex" type="object"
+                            string="重新索引"
+                            attrs="{'invisible': [('status','!=','indexed')]}"/>
+                    <field name="status" widget="statusbar"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="file" filename="file_name"/>
+                            <field name="file_name" invisible="1"/>
+                        </group>
+                        <group>
+                            <field name="chunk_size"/>
+                            <field name="chunk_overlap"/>
+                            <field name="chunk_count"/>
+                        </group>
+                    </group>
+                    <field name="description" placeholder="這份文件的說明（選填）"/>
+                    <field name="error_message" readonly="1"
+                           attrs="{'invisible': [('status','!=','error')]}"/>
+                    <notebook>
+                        <page string="Chunks">
+                            <field name="chunk_ids" readonly="1">
+                                <tree>
+                                    <field name="name"/>
+                                    <field name="content"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_ai_knowledge_source" model="ir.actions.act_window">
+        <field name="name">知識庫匯入</field>
+        <field name="res_model">ai.knowledge.source</field>
+        <field name="view_mode">list,form</field>
+    </record>
+
+    <!-- ── ai.model（使用者可維護的模型清單）───────────────────── -->
+
+    <record id="view_ai_model_list" model="ir.ui.view">
+        <field name="name">ai.model.tree</field>
+        <field name="model">ai.model</field>
+        <field name="arch" type="xml">
+            <tree string="AI 模型清單" editable="bottom" multi_edit="1">
+                <field name="sequence" widget="handle"/>
+                <field name="provider"/>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="is_default"/>
+                <field name="active" widget="boolean_toggle"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_ai_model_form" model="ir.ui.view">
+        <field name="name">ai.model.form</field>
+        <field name="model">ai.model</field>
+        <field name="arch" type="xml">
+            <form string="AI 模型">
+                <sheet>
+                    <group>
+                        <field name="provider"/>
+                        <field name="name"/>
+                        <field name="code"/>
+                        <field name="is_default"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_ai_model" model="ir.actions.act_window">
+        <field name="name">AI 模型清單</field>
+        <field name="res_model">ai.model</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_group_provider': 1}</field>
+    </record>
+
+    <record id="view_ai_model_search" model="ir.ui.view">
+        <field name="name">ai.model.search</field>
+        <field name="model">ai.model</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="code"/>
+                <filter name="group_provider" string="供應商"
+                        context="{'group_by':'provider'}"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- ── Menu ────────────────────────────────────────────────── -->
+
+    <menuitem
+        id="menu_stock_watchlist"
+        name="自選股"
+        parent="menu_ai_root"
+        action="action_stock_watchlist"
+        sequence="30"
+    />
+
+    <menuitem
+        id="menu_stock_quote"
+        name="行情快取"
+        parent="menu_ai_root"
+        action="action_stock_quote"
+        sequence="40"
+    />
+
+    <menuitem
+        id="menu_ai_knowledge_source"
+        name="知識庫匯入"
+        parent="menu_ai_root"
+        action="action_ai_knowledge_source"
+        sequence="50"
+    />
+
+    <menuitem
+        id="menu_ai_model"
+        name="AI 模型清單"
+        parent="menu_ai_root"
+        action="action_ai_model"
+        sequence="80"
+    />
+
+    <menuitem
+        id="menu_ai_settings"
+        name="AI 設定"
+        parent="menu_ai_root"
+        action="action_ai_settings"
+        sequence="90"
+    />
+
+</odoo>

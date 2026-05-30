@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+    <!-- 預設模型種子；noupdate=1：使用者日後的增刪改不會被升級覆寫 -->
+    <data noupdate="1">
+
+        <!-- OpenAI -->
+        <record id="model_openai_gpt41" model="ai.model">
+            <field name="provider">openai</field>
+            <field name="name">GPT-4.1</field>
+            <field name="code">gpt-4.1</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="model_openai_gpt41_mini" model="ai.model">
+            <field name="provider">openai</field>
+            <field name="name">GPT-4.1 Mini</field>
+            <field name="code">gpt-4.1-mini</field>
+            <field name="sequence">20</field>
+            <field name="is_default" eval="True"/>
+        </record>
+        <record id="model_openai_gpt4o" model="ai.model">
+            <field name="provider">openai</field>
+            <field name="name">GPT-4o</field>
+            <field name="code">gpt-4o</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="model_openai_gpt4o_mini" model="ai.model">
+            <field name="provider">openai</field>
+            <field name="name">GPT-4o Mini</field>
+            <field name="code">gpt-4o-mini</field>
+            <field name="sequence">40</field>
+        </record>
+
+        <!-- Google Gemini -->
+        <record id="model_gemini_20_flash" model="ai.model">
+            <field name="provider">gemini</field>
+            <field name="name">Gemini 2.0 Flash（推薦，免費配額健康）</field>
+            <field name="code">gemini-2.0-flash</field>
+            <field name="sequence">10</field>
+            <field name="is_default" eval="True"/>
+        </record>
+        <record id="model_gemini_25_flash_lite" model="ai.model">
+            <field name="provider">gemini</field>
+            <field name="name">Gemini 2.5 Flash-Lite</field>
+            <field name="code">gemini-2.5-flash-lite</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="model_gemini_25_flash" model="ai.model">
+            <field name="provider">gemini</field>
+            <field name="name">Gemini 2.5 Flash（免費層常 429）</field>
+            <field name="code">gemini-2.5-flash</field>
+            <field name="sequence">30</field>
+        </record>
+        <record id="model_gemini_15_pro" model="ai.model">
+            <field name="provider">gemini</field>
+            <field name="name">Gemini 1.5 Pro</field>
+            <field name="code">gemini-1.5-pro</field>
+            <field name="sequence">40</field>
+        </record>
+
+        <!-- Anthropic Claude -->
+        <record id="model_claude_opus_47" model="ai.model">
+            <field name="provider">claude</field>
+            <field name="name">Claude Opus 4.7（最強）</field>
+            <field name="code">claude-opus-4-7</field>
+            <field name="sequence">10</field>
+        </record>
+        <record id="model_claude_sonnet_46" model="ai.model">
+            <field name="provider">claude</field>
+            <field name="name">Claude Sonnet 4.6（推薦）</field>
+            <field name="code">claude-sonnet-4-6</field>
+            <field name="sequence">20</field>
+            <field name="is_default" eval="True"/>
+        </record>
+        <record id="model_claude_haiku_45" model="ai.model">
+            <field name="provider">claude</field>
+            <field name="name">Claude Haiku 4.5（最快）</field>
+            <field name="code">claude-haiku-4-5-20251001</field>
+            <field name="sequence">30</field>
+        </record>
+
+        <!-- Groq -->
+        <record id="model_groq_llama33_70b" model="ai.model">
+            <field name="provider">groq</field>
+            <field name="name">Llama 3.3 70B（推薦，繁中佳）</field>
+            <field name="code">llama-3.3-70b-versatile</field>
+            <field name="sequence">10</field>
+            <field name="is_default" eval="True"/>
+        </record>
+        <record id="model_groq_llama31_8b" model="ai.model">
+            <field name="provider">groq</field>
+            <field name="name">Llama 3.1 8B（最快）</field>
+            <field name="code">llama-3.1-8b-instant</field>
+            <field name="sequence">20</field>
+        </record>
+        <record id="model_groq_gemma2_9b" model="ai.model">
+            <field name="provider">groq</field>
+            <field name="name">Gemma 2 9B</field>
+            <field name="code">gemma2-9b-it</field>
+            <field name="sequence">30</field>
+        </record>
+
+        <!-- Ollama（本機）-->
+        <record id="model_ollama_llama31" model="ai.model">
+            <field name="provider">ollama</field>
+            <field name="name">Llama 3.1</field>
+            <field name="code">llama3.1</field>
+            <field name="sequence">10</field>
+            <field name="is_default" eval="True"/>
+        </record>
+        <record id="model_ollama_qwen25" model="ai.model">
+            <field name="provider">ollama</field>
+            <field name="name">Qwen 2.5</field>
+            <field name="code">qwen2.5</field>
+            <field name="sequence">20</field>
+        </record>
+
+    </data>
+</odoo>
