@@ -1,7 +1,8 @@
 {
     'name': 'Taiwan Stock AI Assistant',
-    'version': '16.0.1.1.0',
+    'version': '16.0.1.2.0',
     'summary': '台股投資 AI 助理：即時行情、AI 分析、知識問答',
+    'license': 'LGPL-3',
     'depends': ['base', 'web'],
     'data': [
         'security/ir.model.access.csv',

@@ -16,10 +16,11 @@ class AIKnowledgeSource(models.Model):
     file_name = fields.Char('檔名')
     description = fields.Text('說明')
 
-    chunk_size = fields.Integer('切塊長度（字元）', default=600,
-                                help='每個 chunk 的最大字元數')
-    chunk_overlap = fields.Integer('重疊字元', default=100,
-                                   help='相鄰 chunk 的重疊字元數，維持語意連續')
+    chunk_size = fields.Integer('目標 token 數', default=0,
+                                help='每個 chunk 的目標 token 數；留 0 自動取 embedding '
+                                     '模型上限（會被夾在模型 max 內，避免超界被截斷）')
+    chunk_overlap = fields.Integer('重疊 token 數', default=20,
+                                   help='相鄰 chunk 的重疊 token 數，維持語意連續')
 
     status = fields.Selection([
         ('draft',   '待處理'),
@@ -54,7 +55,14 @@ class AIKnowledgeSource(models.Model):
 
         data = base64.b64decode(self.file)
         text = loader.extract_text(data, self.file_name or self.name)
-        chunks = loader.chunk_text(text, self.chunk_size, self.chunk_overlap)
+        # 以 embedding 模型的 token 上限為準切塊（含清洗 + 句子邊界 + 重疊），
+        # 避免字元盲切導致超過 128 token 被靜默截斷。chunk_size 作為「目標 token 數」
+        # 上限提示（會被夾在模型上限內），留空/0 則自動取模型上限。
+        chunks = EmbeddingService.chunk(
+            text,
+            target_tokens=self.chunk_size or None,
+            overlap_tokens=self.chunk_overlap or 20,
+        )
         if not chunks:
             raise ValueError('檔案解析後無可用文字內容')
 

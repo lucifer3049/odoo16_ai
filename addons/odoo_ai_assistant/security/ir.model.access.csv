@@ -1,6 +1,8 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
 access_ai_chat_user,access_ai_chat_user,model_ai_chat,base.group_user,1,1,1,1
 access_ai_chat_manager,access_ai_chat_manager,model_ai_chat,base.group_system,1,1,1,1
+access_ai_chat_session_user,access_ai_chat_session_user,model_ai_chat_session,base.group_user,1,1,1,1
+access_ai_chat_session_manager,access_ai_chat_session_manager,model_ai_chat_session,base.group_system,1,1,1,1
 access_ai_document_user,access_ai_document_user,model_ai_document,base.group_user,1,0,0,0
 access_ai_document_manager,access_ai_document_manager,model_ai_document,base.group_system,1,1,1,1
 access_ai_settings_manager,access_ai_settings_manager,model_ai_settings,base.group_system,1,1,1,1

@@ -32,8 +32,8 @@ _MIN_PDF_TEXT_LEN = 30
 def _extract_pdf(data: bytes) -> str:
     try:
         from pypdf import PdfReader
-    except ImportError:
-        raise RuntimeError('解析 PDF 需要 pypdf：pip install pypdf')
+    except ImportError as e:
+        raise RuntimeError('解析 PDF 的 pypdf 無法載入（原始錯誤：%s）' % e) from e
     reader = PdfReader(io.BytesIO(data))
     text = '\n'.join((page.extract_text() or '') for page in reader.pages)
     # 掃描型 PDF（圖片）pypdf 抽不到文字，改用 OCR
@@ -50,11 +50,11 @@ def _ocr_pdf(data: bytes) -> str:
         import fitz  # PyMuPDF
         import pytesseract
         from PIL import Image
-    except ImportError:
+    except ImportError as e:
         raise RuntimeError(
-            '掃描型 PDF 需要 OCR 套件：請確認容器已安裝 '
-            'tesseract-ocr（含 chi_tra 語言包）與 pip 套件 pymupdf、pytesseract。'
-        )
+            '掃描型 PDF 的 OCR 套件無法載入（pymupdf/pytesseract/Pillow），'
+            '原始錯誤：%s' % e
+        ) from e
     doc = fitz.open(stream=data, filetype='pdf')
     texts = []
     for page in doc:
@@ -67,8 +67,8 @@ def _ocr_pdf(data: bytes) -> str:
 def _extract_docx(data: bytes) -> str:
     try:
         from docx import Document
-    except ImportError:
-        raise RuntimeError('解析 Word 需要 python-docx：pip install python-docx')
+    except ImportError as e:
+        raise RuntimeError('解析 Word 的 python-docx 無法載入（原始錯誤：%s）' % e) from e
     doc = Document(io.BytesIO(data))
     parts = [p.text for p in doc.paragraphs if p.text.strip()]
     # 也抽表格內容
@@ -83,8 +83,8 @@ def _extract_docx(data: bytes) -> str:
 def _extract_xlsx(data: bytes) -> str:
     try:
         from openpyxl import load_workbook
-    except ImportError:
-        raise RuntimeError('解析 Excel 需要 openpyxl')
+    except ImportError as e:
+        raise RuntimeError('解析 Excel 的 openpyxl 無法載入（原始錯誤：%s）' % e) from e
     wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     lines = []
     for ws in wb.worksheets:

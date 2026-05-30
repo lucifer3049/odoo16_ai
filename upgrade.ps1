@@ -50,7 +50,9 @@ if ($LASTEXITCODE -ne 0) { throw "容器啟動失敗" }
 # 3. 自動偵測資料庫名稱
 if ([string]::IsNullOrWhiteSpace($Db)) {
     Step "自動偵測資料庫名稱"
-    $detected = docker compose exec -T db psql -U odoo -d postgres -tAc `
+    # 帳號取自 db 容器內的 $POSTGRES_USER（來源：docker-compose.yml 的 db 服務環境變數），不寫死
+    $pgUser = (docker compose exec -T db printenv POSTGRES_USER | Out-String).Trim()
+    $detected = docker compose exec -T db psql -U $pgUser -d postgres -tAc `
         "SELECT datname FROM pg_database WHERE datname NOT IN ('postgres','template0','template1')"
     $dbs = @($detected -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
 
@@ -67,8 +69,12 @@ if ([string]::IsNullOrWhiteSpace($Db)) {
 }
 
 # 4. 執行升級（含 migration）
+# 注意：直接呼叫 odoo 會繞過官方 entrypoint，HOST/USER/PASSWORD 等環境變數不會被
+# 轉成連線參數，因此必須明確帶上 --db_host 等，否則 Odoo 會去連容器本機 socket 而失敗。
+# 連線值直接取容器內的 $HOST/$USER/$PASSWORD（來源：docker-compose.yml 的 web 服務環境變數），不寫死帳密。
 Step "升級模組 $Modules（資料庫 $Db）"
-docker compose exec -T web odoo -u $Modules -d $Db --stop-after-init
+docker compose exec -T web sh -c `
+    "odoo -u $Modules -d $Db --db_host=`$HOST --db_user=`$USER --db_password=`$PASSWORD --stop-after-init"
 if ($LASTEXITCODE -ne 0) { throw "模組升級失敗，請查看上方 log。" }
 
 # 5. 重啟 web

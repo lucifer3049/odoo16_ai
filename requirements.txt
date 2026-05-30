@@ -1,0 +1,39 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Python 依賴鎖定檔（pinned）。版本取自 2026-05-30 容器內實際可運作的組合。
+#
+# 為什麼要釘版本：本專案的 ML 依賴鏈（torch / transformers / sentence-transformers
+# / Pillow）彼此版本敏感，不釘版本時 `pip install` 會在 build 當下解出「最新」組合，
+# 曾兩度造成 build 後才爆的錯（Pillow<9.1 缺 Resampling、torch 拉到 CUDA 版 OOM）。
+# 釘死後每次 build 結果可重現，升級依賴改成「有意識地動這個檔」而非碰運氣。
+#
+# 注意：torch 是 CPU-only 版，於 Dockerfile 以 PyTorch CPU index 安裝（見 Dockerfile），
+#       不放這裡是因為純 requirements 無法指定 +cpu build 的 index-url。
+# ──────────────────────────────────────────────────────────────────────────
+
+# ── LLM / API SDKs ──
+openai==2.38.0
+anthropic==0.105.2
+google-genai==1.47.0
+requests==2.32.5
+
+# ── RAG embedding 技術棧（CPU）──
+# sentence-transformers 會連帶帶入 transformers/tokenizers/safetensors/numpy/scipy/
+# scikit-learn；這裡一併釘成已驗證可運作的解析結果（等同 lock）。
+sentence-transformers==5.1.2
+transformers==4.57.6
+huggingface-hub==0.36.2
+tokenizers==0.22.2
+safetensors==0.7.0
+numpy==2.0.2
+scipy==1.13.1
+scikit-learn==1.6.1
+
+# ── 文件解析 / OCR（知識庫匯入）──
+pypdf==6.12.2
+python-docx==1.2.0
+pytesseract==0.3.13
+PyMuPDF==1.26.5
+Pillow==11.3.0
+
+# ── 其他 ──
+pyOpenSSL==26.2.0

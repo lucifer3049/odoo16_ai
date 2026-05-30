@@ -14,6 +14,56 @@ def _system_of(cfg):
     return cfg.get('system_prompt') or SYSTEM_PROMPT
 
 
+# ---------------------------------------------------------------------------
+# 429 配額錯誤解析（把 Google 回傳的 quota_id / retryDelay 攤出來）
+# ---------------------------------------------------------------------------
+
+def _extract_quota_info(e):
+    """
+    從 google-genai APIError 取出配額違規細節。
+    優先讀結構化的 e.details（dict），失敗才退而解析 str(e) 內的字典字面值。
+    回傳 dict，可能含 quota_id / retry_delay / model。
+    """
+    import ast
+
+    payload = getattr(e, 'details', None)
+    if not isinstance(payload, dict):
+        s = str(e)
+        start = s.find('{')
+        if start != -1:
+            try:
+                payload = ast.literal_eval(s[start:])   # Google 字串是 Python dict repr（單引號）
+            except (ValueError, SyntaxError):
+                payload = None
+
+    info = {}
+    if isinstance(payload, dict):
+        err = payload.get('error', payload)
+        for d in (err.get('details') or []):
+            t = str(d.get('@type', ''))
+            if 'QuotaFailure' in t:
+                for v in (d.get('violations') or []):
+                    info['quota_id'] = v.get('quotaId') or v.get('quotaMetric') or info.get('quota_id')
+                    dims = v.get('quotaDimensions') or {}
+                    if dims.get('model'):
+                        info['model'] = dims['model']
+            elif 'RetryInfo' in t:
+                info['retry_delay'] = d.get('retryDelay') or info.get('retry_delay')
+    return info
+
+
+def _quota_hint(quota_id):
+    """依 quota_id 給出白話判讀。"""
+    qid = quota_id or ''
+    if 'PerDay' in qid:
+        return '含 PerDay → 今日免費額度已用完，需等隔日重置，或升級付費層／改用其他供應商'
+    if 'PerMinute' in qid:
+        return '含 PerMinute → 短時間請求過密（每分鐘上限），等約 1 分鐘再試即可'
+    if 'FreeTier' in qid:
+        return '免費層配額限制 → 升級付費層或改用其他供應商'
+    return '配額限制 → 依上方類型判斷是每日或每分鐘上限'
+
+
 class LLMService:
 
     @staticmethod
@@ -68,13 +118,24 @@ class _OpenAIBackend:
         called_signatures = set()
 
         for _ in range(MAX_ITERATIONS):
-            resp = client.chat.completions.create(
-                model=cfg['model'],
-                messages=messages,
-                tools=tools,
-                tool_choice='auto',
-                max_tokens=MAX_OUTPUT_TOKENS,
-            )
+            try:
+                resp = client.chat.completions.create(
+                    model=cfg['model'],
+                    messages=messages,
+                    tools=tools,
+                    tool_choice='auto',
+                    max_tokens=MAX_OUTPUT_TOKENS,
+                )
+            except Exception as e:
+                # 部分模型（如 Groq llama）在 tool-calling 時會退化成重複/不合法
+                # 的 function call，後端回 400 tool_use_failed。此時不讓整個請求崩，
+                # 改用「無工具」的一般回答優雅降級，至少給出可用答覆。
+                if 'tool_use_failed' not in str(e):
+                    raise
+                fallback = client.chat.completions.create(
+                    model=cfg['model'], messages=messages, max_tokens=MAX_OUTPUT_TOKENS,
+                )
+                return fallback.choices[0].message.content or '', tool_log
             msg = resp.choices[0].message
             if not msg.tool_calls:
                 return msg.content or '', tool_log
@@ -222,12 +283,26 @@ class _GeminiBackend:
 
     @staticmethod
     def _raise_if_rate_limited(e):
+        is_429 = getattr(e, 'code', None) == 429
         msg = str(e).lower()
-        if '429' in msg or 'resource_exhausted' in msg or 'quota' in msg:
-            raise RuntimeError(
-                'Gemini API 配額已用完（429）。請稍等 1 分鐘後再試，'
-                '或至 Google AI Studio 確認免費配額。'
-            ) from e
+        if not (is_429 or '429' in msg or 'resource_exhausted' in msg or 'quota' in msg):
+            return
+
+        info = _extract_quota_info(e)
+        parts = ['Gemini API 配額限制（429 RESOURCE_EXHAUSTED）。']
+        if info.get('quota_id'):
+            parts.append('配額類型：%s' % info['quota_id'])
+        if info.get('model'):
+            parts.append('受限模型：%s' % info['model'])
+        if info.get('retry_delay'):
+            parts.append('Google 建議重試間隔：%s' % info['retry_delay'])
+        parts.append('判讀：%s' % _quota_hint(info.get('quota_id')))
+        if not info.get('quota_id'):
+            parts.append(
+                '（Google 未回傳配額細項；最常見是新金鑰背後的 GCP 專案配額為 0，'
+                '或免費層當日請求數已用完。）'
+            )
+        raise RuntimeError('\n'.join(parts)) from e
 
     @staticmethod
     def _build_contents(prompt, history, context):

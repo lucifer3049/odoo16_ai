@@ -158,6 +158,7 @@ docker compose up -d        # 啟動
 docker compose down         # 停止
 docker compose ps           # 狀態
 docker compose logs -f web  # 即時 log
+docker compose exec -u root web pip install # 安裝套件
 ```
 
 ---
