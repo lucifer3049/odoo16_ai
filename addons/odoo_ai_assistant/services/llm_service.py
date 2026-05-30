@@ -82,6 +82,16 @@ class LLMService:
             return _ClaudeBackend.chat_with_tools(prompt, tools, cfg, env, history, context)
         return _OpenAIBackend.chat_with_tools(prompt, tools, cfg, env, history, context)
 
+    @staticmethod
+    def chat_stream(prompt, cfg, history=None, context=None):
+        """串流版一般對話：回傳一個逐段 yield 文字片段的 generator。
+        供非同步 job 邊產生邊用 bus 推送（見 ai.chat.process_chat）。"""
+        if cfg['provider'] == 'gemini':
+            return _GeminiBackend.chat_stream(prompt, cfg, history, context)
+        if cfg['provider'] == 'claude':
+            return _ClaudeBackend.chat_stream(prompt, cfg, history, context)
+        return _OpenAIBackend.chat_stream(prompt, cfg, history, context)
+
 
 # ---------------------------------------------------------------------------
 # OpenAI backend
@@ -106,6 +116,22 @@ class _OpenAIBackend:
             model=cfg['model'], messages=messages, max_tokens=MAX_OUTPUT_TOKENS,
         )
         return resp.choices[0].message.content
+
+    @staticmethod
+    def chat_stream(prompt, cfg, history, context):
+        messages = build_messages(prompt, history=history, context=context,
+                                  system_prompt=_system_of(cfg))
+        client = _OpenAIBackend._client(cfg)
+        stream = client.chat.completions.create(
+            model=cfg['model'], messages=messages, max_tokens=MAX_OUTPUT_TOKENS,
+            stream=True,
+        )
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta.content
+            if delta:
+                yield delta
 
     @staticmethod
     def chat_with_tools(prompt, tools, cfg, env, history, context):
@@ -213,6 +239,24 @@ class _ClaudeBackend:
             messages=chat_messages,
         )
         return resp.content[0].text
+
+    @staticmethod
+    def chat_stream(prompt, cfg, history, context):
+        from .prompt_service import build_messages
+        client = _ClaudeBackend._client(cfg)
+        system_str, chat_messages = _ClaudeBackend._split_messages(
+            build_messages(prompt, history=history, context=context,
+                           system_prompt=_system_of(cfg))
+        )
+        with client.messages.stream(
+            model=cfg['model'],
+            max_tokens=MAX_OUTPUT_TOKENS,
+            system=system_str,
+            messages=chat_messages,
+        ) as stream:
+            for text in stream.text_stream:
+                if text:
+                    yield text
 
     @staticmethod
     def chat_with_tools(prompt, tools, cfg, env, history, context):
@@ -378,6 +422,31 @@ class _GeminiBackend:
             return response.text
         except Exception:
             return str(response)
+
+    @staticmethod
+    def chat_stream(prompt, cfg, history, context):
+        from google.genai import types
+
+        client = _GeminiBackend._client(cfg)
+        contents = _GeminiBackend._build_contents(prompt, history, context)
+        config = types.GenerateContentConfig(
+            system_instruction=_system_of(cfg),
+            max_output_tokens=MAX_OUTPUT_TOKENS,
+        )
+        try:
+            stream = client.models.generate_content_stream(
+                model=cfg['model'], contents=contents, config=config,
+            )
+            for chunk in stream:
+                try:
+                    text = chunk.text
+                except Exception:
+                    text = None
+                if text:
+                    yield text
+        except Exception as e:
+            _GeminiBackend._raise_if_rate_limited(e)
+            raise
 
     @staticmethod
     def chat_with_tools(prompt, tools, cfg, env, history, context):

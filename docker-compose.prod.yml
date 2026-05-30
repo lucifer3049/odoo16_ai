@@ -23,9 +23,10 @@ services:
     restart: unless-stopped
     depends_on:
       - db
-    ports:
-      - "8069:8069"
-      - "8072:8072"                      # bus（websocket）；正式環境建議改由反向代理 proxy /websocket
+    # 不直接對外；由 nginx 前置（websocket 導到 gevent worker）。
+    expose:
+      - "8069"
+      - "8072"
     environment:
       HOST: db
       USER: odoo
@@ -34,6 +35,17 @@ services:
       - odoo_data:/var/lib/odoo          # filestore、sessions（持久化）
       - ./addons:/mnt/extra-addons       # 若用 image 內建 addons 可移除此行
       - ./odoo.conf:/etc/odoo/odoo.conf:ro   # 自訂設定：queue_job channels / workers / gevent
+
+  # 反向代理：/websocket → gevent(8072)，其餘 → HTTP(8069)。bus 串流必須經此。
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - web
+    ports:
+      - "8069:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   pg_data:

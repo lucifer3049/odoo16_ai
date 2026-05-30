@@ -57,6 +57,12 @@
 - 可在「AI 設定」自訂覆寫 System Prompt。
 - 對話**自動注入**當日大盤摘要＋RAG 檢索到的相關文件當上下文（預設開啟 RAG）。
 
+### ⚡ 非同步串流回答（不阻塞、逐字輸出）
+- 送出問題後 **HTTP 請求立刻 return**，LLM 工作交給 **queue_job** 背景佇列 → 多人同時用不會卡住彼此。
+- 回答透過 **bus websocket 逐字推回**，像 ChatGPT 打字機效果，消除「轉圈圈」等待感；過程顯示「檢索中／查行情中／產生中」階段提示。
+- **依供應商分流**：雲端 API 走可併發的 `root.cloud`、本機 Ollama 走 `root.local_llm:1`（一次一個保護 CPU）。
+- 可隨時按 **「停止生成」** 中止，保留已產生的部分內容。
+
 ### 🔧 Function Calling 工具
 - 即時個股行情、個股日成交、股票搜尋、大盤指數，跨五家供應商皆可用。
 
@@ -154,10 +160,10 @@ docker compose up -d --build       # 建 image（含 pgvector、OCR、sentence-t
 ```
 > 首次使用 RAG 會自動下載多語言 embedding 模型（約 470MB），容器需可連網一次。
 
-> 🔧 **背景任務與即時推送（建置中）**：本專案正導入 **OCA `queue_job`**（背景佇列，避免 LLM 長請求阻塞 HTTP worker）＋ **`bus.bus`**（把產生中的回答即時推回前端）。相關設定集中在 [odoo.conf](odoo.conf)：
+> 🔧 **背景任務與即時串流**：聊天採 **OCA `queue_job`**（背景佇列，HTTP worker 立刻釋放、不被 LLM 長請求阻塞）＋ **`bus.bus` websocket**（把產生中的回答逐字推回前端）。相關設定集中在 [odoo.conf](odoo.conf)：
 > - `server_wide_modules` 載入 `queue_job`；`workers > 0` 才會啟動 jobrunner 與 gevent worker。
 > - `[queue_job] channels`：依供應商分流 —— `root.cloud`（雲端 API，可多併發）、`root.local_llm:1`（Ollama，一次一個保護 CPU）。
-> - bus 走 gevent worker（`gevent_port = 8072`）；正式環境需由反向代理把 `/websocket` 導到此 port。
+> - bus 走 gevent worker（`gevent_port = 8072`）；**[nginx.conf](nginx.conf) 把 `/websocket` 導到此 port**（多進程模式下 bus 推送的必要條件）。對外仍是 `localhost:8069`（nginx 前置）。
 > - ⚠️ 每個 worker 是獨立 process，會各自載入模組與 embedding 模型 → 吃 RAM，CPU-only 單機請依記憶體調 `workers`。
 > - ⚠️ **記憶體上限**：`workers>0` 會啟用 Odoo 的 `RLIMIT_AS`（預設約 2.5GB），torch 的虛擬記憶體會撐爆它而報 `failed to map segment from shared object`。已在 [odoo.conf](odoo.conf) 設 `limit_memory_soft/hard = 0` 解除。
 
@@ -247,7 +253,8 @@ ollama pull llama3.1    # 支援工具呼叫
 
 | 端點 | 方法 | 說明 |
 |---|---|---|
-| `/ai/chat` | POST | 主要對話，支援 `use_tools`、`use_rag`、`provider`、`model`（逐題覆寫） |
+| `/ai/chat` | POST | 主要對話（**非同步**）：建 pending 紀錄並入列 queue_job，立刻回 `message_id`；答案由 bus 逐段推送。支援 `use_tools`、`use_rag`、`provider`、`model`（逐題覆寫） |
+| `/ai/chat/stop` | POST | 停止生成：標記 `cancel_requested`，背景 job 偵測後中止 |
 | `/ai/config` | POST | 取得目前 provider/model 與各供應商可選模型清單、金鑰狀態 |
 | `/ai/watchlist` | POST | 取得自選股 |
 | `/ai/watchlist/add` | POST | 新增自選股 |
@@ -307,7 +314,7 @@ git tag v16.0.1.2.0 && git push origin v16.0.1.2.0
 - [ ] **更多資料工具**：三大法人買賣超、融資融券、外資持股、除權息、ETF 成分股。
 - [ ] **新聞情緒 RAG**：定時爬個股新聞 → 向量庫 → 給 LLM 當情緒/事件面依據。
 - [ ] **法說會/財報 PDF 自動匯入**：接上現有檔案 ingestion＋OCR，自動摘要重點。
-- [ ] **回應串流（SSE）**：逐字輸出，改善等待體感。
+- [x] **回應串流**：逐字輸出，改善等待體感（改以 queue_job + bus websocket 實作，非阻塞）。
 - [ ] **RAG 引用標註**：回答標出處（來源檔名/日期），可信度更高。
 - [ ] **上櫃（TPEX）支援**：目前以上市為主，補上櫃資料源。
 
@@ -334,6 +341,15 @@ git tag v16.0.1.2.0 && git push origin v16.0.1.2.0
 ## 變更紀錄
 
 > 格式：版本（日期）— 重點。每次升級在此新增一筆。
+
+### v16.0.1.3.0（2026-05-30）— 非同步串流回答（不阻塞 + 逐字輸出）
+- **後端非同步化**：`/ai/chat` 改為建立 pending 紀錄並丟進 **OCA `queue_job`** 背景佇列後立刻 return，HTTP worker 不再被 LLM 長請求阻塞 → 多人併發不互卡。
+- **bus websocket 串流**：背景 job 邊產生邊用 `bus.bus` 把文字 delta 推回前端（[chat_widget.js](addons/odoo_ai_assistant/static/src/js/chat_widget.js) 訂閱 `ai_chat_<uid>` 頻道），打字機式逐字輸出；過程顯示「檢索中／查行情中／產生中」狀態。
+- **供應商分流 channel**：雲端走 `root.cloud`（可併發）、Ollama 走 `root.local_llm:1`（保護 CPU），於 [odoo.conf](odoo.conf) 設定。
+- **停止生成**：新增 `/ai/chat/stop`，`ai.chat.cancel_requested` 旗標讓串流迴圈中止並保留部分內容。
+- **部署**：新增 [odoo.conf](odoo.conf)（`workers`、`gevent_port`、`proxy_mode`、channels）、vendor OCA `queue_job` 進 image（[Dockerfile](Dockerfile)）、新增 **nginx 反向代理**（[nginx.conf](nginx.conf)）把 `/websocket` 導到 gevent worker。
+- **記憶體雷修正**：`workers>0` 啟用 `RLIMIT_AS` 撐爆 torch 虛擬記憶體（`failed to map segment`），以 `limit_memory_soft/hard = 0` 解除；`upgrade.ps1` 升級指令加 `--workers=0 --no-http` 避免 prefork 搶 port。
+- **三家後端串流**：`LLMService.chat_stream` 為 OpenAI/Groq、Claude、Gemini 各加串流實作；工具路徑先跑完工具迴圈再整段送出。
 
 ### v16.0.1.1.0（2026-05-30）— 向量庫升級與平台化
 - **pgvector 向量庫**：`ai_document.embedding_vec` 原生 `vector(384)` + HNSW cosine 索引，取代純 Python cosine。

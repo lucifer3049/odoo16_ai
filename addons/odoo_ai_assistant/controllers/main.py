@@ -1,11 +1,8 @@
-import json
 import re
 
-from odoo import http, fields
+from odoo import http
 from odoo.http import request
 
-from ..services.llm_service import LLMService
-from ..services.tool_service import ToolService
 from ..services.embedding_service import EmbeddingService
 
 _STOCK_KEYWORDS = re.compile(
@@ -80,16 +77,21 @@ class AIController(http.Controller):
     # Chat
     # ------------------------------------------------------------------
 
+    # provider → queue_job channel：雲端走可併發的 cloud，本機 Ollama 走 capacity=1 的 local_llm
+    _CHANNEL_BY_PROVIDER = {
+        'ollama': 'root.local_llm',
+    }
+
     @http.route('/ai/chat', type='json', auth='user')
     def ai_chat(self, prompt, use_rag=True, use_tools=True, provider=None, model=None,
                 session_id=None):
+        """非同步化：建立 pending 紀錄並把 LLM 工作丟進 queue_job，立刻 return。
+        實際回答由背景 job 透過 bus（頻道 ai_chat_<uid>）逐段推回前端。"""
         settings = _get_or_create_settings()
         # 每題可獨立指定 provider/model；未指定才用預設供應商
-        if provider:
-            cfg = settings.get_llm_config_for(provider, model)
-        else:
-            cfg = settings.get_llm_config()
+        cfg = settings.get_llm_config_for(provider, model) if provider else settings.get_llm_config()
 
+        # 早期金鑰檢查：讓使用者立即得到回饋（job 內仍會再驗一次）
         if not cfg['api_key']:
             labels = {'openai': 'OpenAI', 'gemini': 'Gemini', 'claude': 'Claude', 'groq': 'Groq'}
             provider_label = labels.get(cfg['provider'], cfg['provider'])
@@ -98,107 +100,46 @@ class AIController(http.Controller):
         # 綁定對話 session：沿用前端帶來的，否則用第一句話開一個新對話
         Session = request.env['ai.chat.session'].sudo()
         session = _own_session(session_id)
+        is_new_session = not session
         if not session:
             session = Session.create({
                 'user_id': request.env.user.id,
                 'name': Session.title_from_prompt(prompt),
             })
 
-        # 取「同一對話」最近 2 輪（省 token；過多歷史對精準度幫助有限）
-        history_records = request.env['ai.chat'].sudo().search([
-            ('session_id', '=', session.id),
-            ('status', '=', 'done'),
-        ], order='id desc', limit=2)
-        history = [
-            {'prompt': r.prompt, 'response': r.response}
-            for r in reversed(history_records)
-        ]
+        # 建立 pending 訊息紀錄；session.touch 讓對話頂到最上
+        record = request.env['ai.chat'].sudo().create({
+            'session_id': session.id,
+            'user_id': request.env.user.id,
+            'prompt': prompt,
+            'status': 'pending',
+        })
+        session.touch()
 
-        try:
-            # RAG 上下文：固定帶最新大盤摘要 + 依問題檢索相關每日/知識文件
-            context_parts = []
-            summary = EmbeddingService.latest_market_summary(request.env)
-            if summary and summary.content:
-                context_parts.append(summary.content)
-            if use_rag:
-                docs = EmbeddingService.search_documents(
-                    request.env, prompt, top_k=5,
-                    doc_types=['manual', 'daily_stock', 'daily_market'],
-                )
-                for d in docs:
-                    if d.content and d.content not in context_parts:
-                        context_parts.append(d.content)
-            context = '\n\n'.join(context_parts) or None
+        # 依 provider 派送到對應 channel；job 內部再取 api_key（不經 job 參數落地）
+        channel = self._CHANNEL_BY_PROVIDER.get(cfg['provider'], 'root.cloud')
+        record.with_delay(
+            channel=channel,
+            description='AI chat #%s (%s)' % (record.id, cfg['provider']),
+        ).process_chat(prompt, provider, model, use_rag, use_tools)
 
-            if use_tools and _needs_tools(prompt):
-                final_text, tool_log = LLMService.chat_with_tools(
-                    prompt,
-                    tools=ToolService.get_tool_definitions(),
-                    cfg=cfg,
-                    env=request.env,
-                    history=history,
-                    context=context,
-                )
-                response_text = final_text or json.dumps(tool_log, ensure_ascii=False)
-            else:
-                response_text = LLMService.chat(
-                    prompt,
-                    cfg=cfg,
-                    history=history,
-                    context=context,
-                )
+        return {
+            'queued': True,
+            'message_id': record.id,
+            'provider': cfg['provider'],
+            'model': cfg['model'],
+            'session_id': session.id,
+            'session_name': session.name,
+            'is_new_session': is_new_session,
+        }
 
-            request.env['ai.chat'].sudo().create({
-                'session_id': session.id,
-                'user_id': request.env.user.id,
-                'prompt': prompt,
-                'response': response_text,
-                'model_used': cfg['model'],
-                'status': 'done',
-            })
-            session.touch()
-            return {
-                'response': response_text,
-                'provider': cfg['provider'],
-                'model': cfg['model'],
-                'session_id': session.id,
-                'session_name': session.name,
-            }
-
-        except Exception as e:
-            # 取出最底層的原始例外，避免 RuntimeError 包裝層遮蔽真正原因
-            root = e
-            while root.__cause__ is not None:
-                root = root.__cause__
-            root_str = str(root)
-            err_str = str(e)
-            combined = f'{err_str} | root: {root_str}'
-
-            if '429' in combined or 'quota' in combined.lower() or 'exhausted' in combined.lower():
-                # err_str 已是 LLMService 解析過的配額細節（quota_id / retryDelay / 判讀）
-                user_msg = (
-                    f'⚠️ {err_str}\n'
-                    '——\n'
-                    '可先在上方切換到 OpenAI／Groq 繼續使用，'
-                    '或至 https://aistudio.google.com 確認金鑰的專案配額。'
-                )
-            elif 'timed out' in combined.lower() or 'timeout' in combined.lower() or 'read operation' in combined.lower():
-                user_msg = (
-                    '⚠️ 請求逾時，AI 或行情 API 回應過慢。\n'
-                    '請稍後再試，若持續發生請確認網路連線是否正常。\n'
-                    f'（原始錯誤：{root_str[:200]}）'
-                )
-            else:
-                user_msg = f'{err_str}\n（根因：{root_str[:300]}）' if root_str != err_str else err_str
-            request.env['ai.chat'].sudo().create({
-                'session_id': session.id,
-                'user_id': request.env.user.id,
-                'prompt': prompt,
-                'status': 'error',
-                'error_message': err_str,
-            })
-            session.touch()
-            return {'error': user_msg, 'session_id': session.id, 'session_name': session.name}
+    @http.route('/ai/chat/stop', type='json', auth='user')
+    def ai_chat_stop(self, message_id):
+        """使用者按「停止生成」：標記 cancel_requested，job 串流迴圈會偵測並中止。"""
+        record = request.env['ai.chat'].sudo().browse(int(message_id))
+        if record.exists() and record.user_id.id == request.env.user.id:
+            record.cancel_requested = True
+        return {'ok': True}
 
     # ------------------------------------------------------------------
     # 對話 session（ChatGPT 式側邊欄）

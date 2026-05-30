@@ -86,7 +86,12 @@
       "Bash(node --check /tmp/cw_check.mjs)",
       "Bash(rm -f /tmp/cw_check.mjs)",
       "PowerShell(docker compose exec -T db psql -U odoo -d odoo16_ai -c \"SELECT id, name, res_model, res_field, res_id FROM ir_attachment WHERE store_fname LIKE '%d09086a0%';\")",
-      "PowerShell(docker compose exec -T db psql -U odoo -d odoo16_ai -c \"DELETE FROM ir_attachment WHERE id = 5 AND store_fname LIKE '%d09086a0%';\")"
+      "PowerShell(docker compose exec -T db psql -U odoo -d odoo16_ai -c \"DELETE FROM ir_attachment WHERE id = 5 AND store_fname LIKE '%d09086a0%';\")",
+      "Bash(python -m compileall -q addons/odoo_ai_assistant/models/ai_chat.py addons/odoo_ai_assistant/controllers/main.py addons/odoo_ai_assistant/services/llm_service.py)",
+      "Bash(echo \"compileall finished with status $?\")",
+      "PowerShell(docker compose exec -T db psql -U odoo -d odoo16_ai -c \"DELETE FROM ir_attachment WHERE url LIKE '/web/assets/%';\")",
+      "PowerShell(docker compose exec -T web grep -rn \"addChannel\\\\|addEventListener\\\\|notification\" /usr/lib/python3/dist-packages/odoo/addons/bus/static/src/services/bus_service.js)",
+      "PowerShell(docker compose exec -T web sh -c \"sed -n '55,90p;155,185p' /usr/lib/python3/dist-packages/odoo/addons/bus/static/src/services/bus_service.js\")"
     ]
   }
 }

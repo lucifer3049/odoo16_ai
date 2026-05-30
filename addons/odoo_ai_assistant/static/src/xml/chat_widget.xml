@@ -75,14 +75,14 @@
                                 <t t-else="">Error</t>
                             </div>
                             <div class="o_ai_message_content">
+                                <t t-if="msg.statusText">
+                                    <span class="o_ai_status" t-esc="msg.statusText"/>
+                                </t>
                                 <t t-esc="msg.content"/>
+                                <t t-if="msg.streaming">
+                                    <span class="o_ai_caret">▍</span>
+                                </t>
                             </div>
-                        </div>
-                    </t>
-
-                    <t t-if="state.loading">
-                        <div class="o_ai_message o_ai_message_assistant o_ai_loading">
-                            <span>AI is thinking…</span>
                         </div>
                     </t>
                 </div>
@@ -96,6 +96,13 @@
                         placeholder="Ask AI… (Enter to send, Shift+Enter for newline)"
                         rows="2"
                     />
+                    <button
+                        t-if="state.streamingId"
+                        class="o_ai_stop_btn btn btn-secondary"
+                        t-on-click="stopGeneration"
+                    >
+                        ■ 停止
+                    </button>
                     <button
                         class="o_ai_send_btn btn btn-primary"
                         t-on-click="sendMessage"

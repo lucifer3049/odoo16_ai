@@ -16,9 +16,11 @@ services:
     image: odoo16-ai
     depends_on:
       - db
-    ports:
-      - "8069:8069"
-      - "8072:8072"          # bus（websocket/longpolling）走 gevent worker
+    # 不再直接對外發佈 port，改由 nginx 前置（websocket 需導到 gevent worker）。
+    # 容器內 8069(HTTP)/8072(gevent) 由 nginx 經 compose 內網存取。
+    expose:
+      - "8069"
+      - "8072"
     volumes:
       - ./addons:/mnt/extra-addons
       - ./odoo:/var/lib/odoo
@@ -27,6 +29,17 @@ services:
       HOST: db
       USER: odoo
       PASSWORD: odoo
+
+  # 反向代理：把 /websocket 導到 gevent worker(8072)，其餘導到 HTTP worker(8069)。
+  # bus 即時推送（串流逐字輸出）在多進程模式下必須經此。對外仍是 localhost:8069。
+  nginx:
+    image: nginx:alpine
+    depends_on:
+      - web
+    ports:
+      - "8069:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
 
 volumes:
   postgres_data:

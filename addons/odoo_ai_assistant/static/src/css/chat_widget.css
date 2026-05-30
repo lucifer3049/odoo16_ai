@@ -222,3 +222,30 @@
     align-self: flex-end;
     white-space: nowrap;
 }
+
+.o_ai_stop_btn {
+    align-self: flex-end;
+    white-space: nowrap;
+    margin-right: 6px;
+}
+
+/* 串流狀態提示（檢索中／查行情中／產生中…）*/
+.o_ai_status {
+    display: inline-block;
+    margin-right: 6px;
+    color: #875a7b;
+    font-style: italic;
+    opacity: 0.85;
+}
+
+/* 串流中的閃爍游標 */
+.o_ai_caret {
+    display: inline-block;
+    margin-left: 1px;
+    color: #875a7b;
+    animation: o_ai_blink 1s step-start infinite;
+}
+
+@keyframes o_ai_blink {
+    50% { opacity: 0; }
+}

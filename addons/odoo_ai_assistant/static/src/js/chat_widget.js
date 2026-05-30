@@ -1,6 +1,6 @@
 /** @odoo-module */
 
-import { Component, useState, useRef, onMounted } from '@odoo/owl';
+import { Component, useState, useRef, onMounted, onWillUnmount } from '@odoo/owl';
 import { registry } from '@web/core/registry';
 import { useService } from '@web/core/utils/hooks';
 
@@ -9,12 +9,19 @@ export class AIChatWidget extends Component {
 
     setup() {
         this.rpc = useService('rpc');
+        this.user = useService('user');
+        this.busService = useService('bus_service');
         this.messagesRef = useRef('messages');
+
+        // bus 事件可能在 /ai/chat 回傳 message_id 之前就到（job 搶先送 status），
+        // 此時先暫存，待 placeholder 取得 id 後再補放。
+        this._busBuffer = {};
 
         this.state = useState({
             prompt: '',
             messages: [],
             loading: false,
+            streamingId: null,   // 目前正在串流的 message_id（決定是否顯示「停止」）
             useRag: true,
             useTools: true,
             provider: '',
@@ -26,10 +33,29 @@ export class AIChatWidget extends Component {
             sidebarOpen: true,
         });
 
+        // 元件掛載即訂閱使用者專屬頻道（早於送出第一則訊息，避免漏接開頭 delta）。
+        // Odoo 16 的 bus_service 用 addEventListener("notification")，detail 是
+        // 一組 {type, payload}；type 為 _sendone 的第 2 參數（這裡是 'ai_chat'）。
+        this._onNotification = ({ detail: notifications }) => {
+            for (const { type, payload } of notifications) {
+                if (type === 'ai_chat') {
+                    this._onBus(payload);
+                }
+            }
+        };
+        this.busService.addEventListener('notification', this._onNotification);
+        this._channel = `ai_chat_${this.user.userId}`;
+        this.busService.addChannel(this._channel);
+
         onMounted(async () => {
             await this.loadConfig();
             await this.loadSessions();
             this._scrollToBottom();
+        });
+
+        onWillUnmount(() => {
+            this.busService.removeEventListener('notification', this._onNotification);
+            this.busService.deleteChannel(this._channel);
         });
     }
 
@@ -41,6 +67,51 @@ export class AIChatWidget extends Component {
             this.state.providers = cfg.providers || [];
         } catch (e) {
             // 設定載入失敗不阻斷聊天
+        }
+    }
+
+    // ── bus 即時推送處理 ────────────────────────────────────────
+
+    _onBus(payload) {
+        if (!payload || payload.type === undefined) return;
+        const id = payload.message_id;
+        const msg = this.state.messages.find(
+            (m) => m.id === id && (m.role === 'assistant' || m.role === 'error'));
+        if (!msg) {
+            // placeholder 尚未取得 id，先暫存
+            (this._busBuffer[id] = this._busBuffer[id] || []).push(payload);
+            return;
+        }
+        this._applyBus(msg, payload);
+    }
+
+    _applyBus(msg, payload) {
+        if (payload.type === 'status') {
+            msg.statusText = payload.text || '';
+        } else if (payload.type === 'delta') {
+            msg.statusText = '';
+            msg.content += payload.text || '';
+        } else if (payload.type === 'done') {
+            msg.streaming = false;
+            msg.statusText = '';
+            if (payload.model) msg.model = payload.model;
+            this._endStreaming(msg.id);
+            // 新對話的標題在後端產生，完成後刷新側邊欄
+            this.loadSessions();
+        } else if (payload.type === 'error') {
+            msg.role = 'error';
+            msg.content = payload.text || '（發生錯誤）';
+            msg.streaming = false;
+            msg.statusText = '';
+            this._endStreaming(msg.id);
+        }
+        this._scrollToBottom();
+    }
+
+    _endStreaming(id) {
+        if (this.state.streamingId === id) {
+            this.state.streamingId = null;
+            this.state.loading = false;
         }
     }
 
@@ -125,6 +196,13 @@ export class AIChatWidget extends Component {
         this.state.messages.push({ role: 'user', content: prompt });
         this.state.prompt = '';
         this.state.loading = true;
+
+        // 先放一個串流中的 assistant 泡泡；id 待後端回傳後補上
+        const placeholder = {
+            role: 'assistant', content: '', model: '',
+            id: null, streaming: true, statusText: '排隊中…',
+        };
+        this.state.messages.push(placeholder);
         this._scrollToBottom();
 
         try {
@@ -137,29 +215,46 @@ export class AIChatWidget extends Component {
                 session_id: this.state.currentSessionId,
             });
 
-            // 後端回傳所屬 session（新對話會在此建立）
-            if (result.session_id) {
-                const isNew = result.session_id !== this.state.currentSessionId;
-                this.state.currentSessionId = result.session_id;
-                if (isNew) {
-                    await this.loadSessions();
-                }
+            // 立即錯誤（例如未設金鑰）：直接把泡泡轉成錯誤
+            if (result.error) {
+                placeholder.role = 'error';
+                placeholder.content = result.error;
+                placeholder.streaming = false;
+                placeholder.statusText = '';
+                this.state.loading = false;
+                return;
             }
 
-            if (result.error) {
-                this.state.messages.push({ role: 'error', content: result.error });
-            } else {
-                this.state.messages.push({
-                    role: 'assistant',
-                    content: result.response,
-                    model: result.model,
-                });
+            placeholder.id = result.message_id;
+            placeholder.model = result.model;
+            this.state.streamingId = result.message_id;
+            this.state.currentSessionId = result.session_id;
+            if (result.is_new_session) {
+                await this.loadSessions();
+            }
+
+            // 補放在 id 就緒前已抵達的 bus 事件
+            const buffered = this._busBuffer[result.message_id];
+            if (buffered) {
+                buffered.forEach((p) => this._applyBus(placeholder, p));
+                delete this._busBuffer[result.message_id];
             }
         } catch (e) {
-            this.state.messages.push({ role: 'error', content: String(e) });
-        } finally {
+            placeholder.role = 'error';
+            placeholder.content = String(e);
+            placeholder.streaming = false;
+            placeholder.statusText = '';
             this.state.loading = false;
-            this._scrollToBottom();
+        }
+    }
+
+    async stopGeneration() {
+        const id = this.state.streamingId;
+        if (!id) return;
+        try {
+            await this.rpc('/ai/chat/stop', { message_id: id });
+        } catch (e) {
+            // ignore；job 偵測到 cancel 後會自行收斂
         }
     }
 
