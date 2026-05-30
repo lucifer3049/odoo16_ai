@@ -275,9 +275,10 @@ feature/* ──PR──► develop ──PR──► main ──tag v*──►
   1. Python 語法編譯
   2. 所有 XML 格式驗證
   3. **Odoo 模組安裝測試**（起 pgvector 服務 → 全新 DB 安裝模組 → 檢查無致命錯誤）
-- **CD**（[.github/workflows/cd-gcp.yml](.github/workflows/cd-gcp.yml)）：打 `v*` tag 時 build image → 推 GCP **Artifact Registry** → SSH 部署到 Compute Engine VM（pull＋升級＋重啟）。
-  - 未設定 repo variable `GCP_PROJECT_ID` 前**自動跳過**，不影響 CI。
-  - GCP 架構建議與一次性設定步驟見 [docs/DEPLOY_GCP.md](docs/DEPLOY_GCP.md)。
+- **交付（GitHub 原生，推薦、零設定）**（[.github/workflows/release-ghcr.yml](.github/workflows/release-ghcr.yml)）：打 `v*` tag 時 build image → 推到 **GHCR**（`ghcr.io/lucifer3049/odoo16_ai`）→ 自動建立 GitHub Release。用內建 `GITHUB_TOKEN`，無需任何密鑰。
+- **部署到 GCP（選用，上線時啟用）**（[.github/workflows/cd-gcp.yml](.github/workflows/cd-gcp.yml)）：打 `v*` tag 時 build → 推 GCP **Artifact Registry** → SSH 部署到 Compute Engine VM（pull＋升級＋重啟）。未設定 repo variable `GCP_PROJECT_ID` 前**自動跳過**。設定步驟見 [docs/DEPLOY_GCP.md](docs/DEPLOY_GCP.md)。
+
+> GitHub 負責「測試＋打包 image」；「部署（把 image 跑起來）」需要一台運算服務（GCP VM 等）。起步可只用 GHCR，之後再接 GCP。
 
 發佈：合併到 `main` → 打 tag（與 manifest 版本對齊）→ 自動部署。
 ```bash
@@ -340,7 +341,8 @@ git tag v16.0.1.2.0 && git push origin v16.0.1.2.0
 ### v16.0.1.1.1（2026-05-30）— 工程化：GitFlow + CI/CD
 - **簡化 GitFlow**：新增 `develop` 分支；`CONTRIBUTING.md` 規範分支流程；PR 模板。
 - **CI**：GitHub Actions 自動跑 Python 語法、XML 驗證、Odoo 模組安裝測試（pgvector 服務）。
-- **CD（GCP）**：tag `v*` 觸發 build → Artifact Registry → 部署 Compute Engine VM；未設定 GCP 前自動跳過。
+- **交付（GHCR）**：tag `v*` 觸發 build → 推 GitHub Container Registry + 建 Release（零設定）。
+- **CD（GCP，選用）**：tag `v*` 觸發 build → Artifact Registry → 部署 Compute Engine VM；未設定 GCP 前自動跳過。
 - **部署文件**：`docs/DEPLOY_GCP.md`（GCP 架構建議與設定步驟）、`docker-compose.prod.yml`。
 
 ### v16.0.1.0.0（2026-05-24）— 初版

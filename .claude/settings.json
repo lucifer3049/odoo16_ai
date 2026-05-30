@@ -44,7 +44,10 @@
       "Bash(echo \"---exit:$?---\")",
       "Bash(git ls-tree *)",
       "Bash(python -m pip install --quiet pyyaml)",
-      "Bash(python -)"
+      "Bash(python -)",
+      "Bash(gh run *)",
+      "Bash(python -c \"import json,sys; [print\\(f\\\\\"{r['conclusion'] or r['status']:10} | {r['name']:4} | {r['headBranch']}\\\\\"\\) for r in json.load\\(sys.stdin\\)]\")",
+      "Bash(git merge *)"
     ]
   }
 }
