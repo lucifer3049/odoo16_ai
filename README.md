@@ -17,6 +17,7 @@
 - [知識庫（RAG）](#知識庫rag)
 - [API 端點](#api-端點)
 - [資料庫維護](#資料庫維護)
+- [分支策略與 CI/CD](#分支策略與-cicd)
 - [未來可延伸功能 / AI Agent 應用](#未來可延伸功能--ai-agent-應用)
 - [變更紀錄](#變更紀錄)
 - [常見問題](#常見問題)
@@ -262,6 +263,29 @@ docker compose up -d --build
 
 ---
 
+## 分支策略與 CI/CD
+
+採**簡化 GitFlow**：`main`（穩定/部署）← `develop`（整合）← `feature/*`；緊急修正走 `hotfix/*`。詳見 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+```
+feature/* ──PR──► develop ──PR──► main ──tag v*──► CD 部署
+```
+
+- **CI**（[.github/workflows/ci.yml](.github/workflows/ci.yml)）：每次 push / PR 自動跑
+  1. Python 語法編譯
+  2. 所有 XML 格式驗證
+  3. **Odoo 模組安裝測試**（起 pgvector 服務 → 全新 DB 安裝模組 → 檢查無致命錯誤）
+- **CD**（[.github/workflows/cd-gcp.yml](.github/workflows/cd-gcp.yml)）：打 `v*` tag 時 build image → 推 GCP **Artifact Registry** → SSH 部署到 Compute Engine VM（pull＋升級＋重啟）。
+  - 未設定 repo variable `GCP_PROJECT_ID` 前**自動跳過**，不影響 CI。
+  - GCP 架構建議與一次性設定步驟見 [docs/DEPLOY_GCP.md](docs/DEPLOY_GCP.md)。
+
+發佈：合併到 `main` → 打 tag（與 manifest 版本對齊）→ 自動部署。
+```bash
+git tag v16.0.1.2.0 && git push origin v16.0.1.2.0
+```
+
+---
+
 ## 未來可延伸功能 / AI Agent 應用
 
 > 想法清單，依「近期實用 → 進階 Agent → 技術強化」分層；打勾代表已完成。
@@ -312,6 +336,12 @@ docker compose up -d --build
 - **成本控制**：三後端 `max_tokens=2048`、歷史縮為 2 輪。
 - **維運**：`upgrade.ps1` 一鍵升級＋重啟；孤兒欄位清除 migration（避免逼近 1600 欄上限）。
 - **開發體驗**：新增 `.devcontainer` 讓 VS Code 在容器內開發，解決 import 無法解析；移除 docker-compose 過時的 `version` 屬性。
+
+### v16.0.1.1.1（2026-05-30）— 工程化：GitFlow + CI/CD
+- **簡化 GitFlow**：新增 `develop` 分支；`CONTRIBUTING.md` 規範分支流程；PR 模板。
+- **CI**：GitHub Actions 自動跑 Python 語法、XML 驗證、Odoo 模組安裝測試（pgvector 服務）。
+- **CD（GCP）**：tag `v*` 觸發 build → Artifact Registry → 部署 Compute Engine VM；未設定 GCP 前自動跳過。
+- **部署文件**：`docs/DEPLOY_GCP.md`（GCP 架構建議與設定步驟）、`docker-compose.prod.yml`。
 
 ### v16.0.1.0.0（2026-05-24）— 初版
 - Odoo 16 模組：台股即時查詢、五家 AI 供應商、Function Calling、基本 RAG、Owl 聊天介面。

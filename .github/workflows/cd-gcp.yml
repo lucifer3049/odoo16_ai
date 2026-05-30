@@ -1,0 +1,60 @@
+name: CD (GCP)
+
+# 觸發：推送版本 tag（v 開頭）或手動執行。
+# 注意：未設定 repo variable GCP_PROJECT_ID 前，整個 job 會自動「跳過」，不會失敗。
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    name: Build → Artifact Registry → 部署 VM
+    runs-on: ubuntu-latest
+    # GCP 尚未設定（沒填 GCP_PROJECT_ID）時直接跳過，避免擋住流程
+    if: ${{ vars.GCP_PROJECT_ID != '' }}
+    permissions:
+      contents: read
+      id-token: write   # Workload Identity Federation（免金鑰）需要
+
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}          # 例：asia-east1
+      AR_REPO: ${{ vars.GCP_AR_REPO }}        # Artifact Registry repo 名，例：odoo
+      IMAGE_NAME: odoo16-ai
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: GCP 認證（Workload Identity Federation）
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SA_EMAIL }}
+
+      - name: 設定 gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: 設定 Docker 連到 Artifact Registry
+        run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
+
+      - name: Build 並推送 image
+        run: |
+          IMG="${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/${IMAGE_NAME}"
+          TAG="${GITHUB_REF_NAME}"
+          docker build -t "${IMG}:${TAG}" -t "${IMG}:latest" .
+          docker push "${IMG}:${TAG}"
+          docker push "${IMG}:latest"
+          echo "已推送：${IMG}:${TAG}"
+
+      - name: 部署到 Compute Engine VM（pull + 升級 + 重啟）
+        run: |
+          gcloud compute ssh "${{ secrets.GCE_INSTANCE }}" \
+            --zone "${{ secrets.GCE_ZONE }}" \
+            --command "cd ${{ secrets.GCE_APP_DIR }} && \
+              docker compose -f docker-compose.prod.yml pull web && \
+              docker compose -f docker-compose.prod.yml up -d && \
+              docker compose -f docker-compose.prod.yml exec -T web \
+                odoo -u odoo_ai_assistant -d \$ODOO_DB --stop-after-init && \
+              docker compose -f docker-compose.prod.yml restart web"

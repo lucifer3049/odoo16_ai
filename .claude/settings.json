@@ -36,7 +36,15 @@
       "Bash(grep -E \"__pycache__|\\\\.pyc$|/odoo/|settings\\\\.local|\\\\.env$|\\\\.log$\")",
       "Bash(grep -E \"__pycache__|\\\\.pyc$|^odoo/|settings\\\\.local|\\\\.env$|\\\\.log$|filestore|sessions\")",
       "Bash(git checkout *)",
-      "Bash(grep -E \"__pycache__|\\\\.pyc$|^odoo/|settings\\\\.local|\\\\.env$|filestore|sessions\")"
+      "Bash(grep -E \"__pycache__|\\\\.pyc$|^odoo/|settings\\\\.local|\\\\.env$|filestore|sessions\")",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(grep -E \"__pycache__|\\\\.pyc$|^odoo/|settings\\\\.local|filestore|sessions\")",
+      "Bash(git push *)",
+      "Bash(echo \"---exit:$?---\")",
+      "Bash(git ls-tree *)",
+      "Bash(python -m pip install --quiet pyyaml)",
+      "Bash(python -)"
     ]
   }
 }

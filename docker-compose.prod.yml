@@ -1,0 +1,38 @@
+# 正式環境（GCP Compute Engine VM）用的 compose。
+# web 直接拉 Artifact Registry 的 image（不在 VM 上 build）。
+# VM 上需有一個 .env 檔，內容例如：
+#   ODOO_IMAGE=asia-east1-docker.pkg.dev/<PROJECT_ID>/<AR_REPO>/odoo16-ai:latest
+#   ODOO_DB=odoo_prod
+#   DB_PASSWORD=<強密碼>
+# 啟動：docker compose -f docker-compose.prod.yml up -d
+
+services:
+  db:
+    image: pgvector/pgvector:pg15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-odoo}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    # 不對外開放 DB port（僅容器內網存取）
+
+  web:
+    image: ${ODOO_IMAGE}
+    restart: unless-stopped
+    depends_on:
+      - db
+    ports:
+      - "8069:8069"
+    environment:
+      HOST: db
+      USER: odoo
+      PASSWORD: ${DB_PASSWORD:-odoo}
+    volumes:
+      - odoo_data:/var/lib/odoo          # filestore、sessions（持久化）
+      - ./addons:/mnt/extra-addons       # 若用 image 內建 addons 可移除此行
+
+volumes:
+  pg_data:
+  odoo_data:

@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop, 'feature/**', 'hotfix/**']
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint:
+    name: Lint（Python 語法 + XML 驗證）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 編譯所有 Python（語法檢查）
+        run: python -m compileall -q addons
+
+      - name: 驗證所有 XML 格式
+        run: |
+          python - <<'PY'
+          import glob, sys, xml.dom.minidom as m
+          bad = 0
+          for f in glob.glob('addons/**/*.xml', recursive=True):
+              try:
+                  m.parse(f)
+              except Exception as e:
+                  print('XML ERROR:', f, e)
+                  bad = 1
+          sys.exit(bad)
+          PY
+
+  install-test:
+    name: 模組安裝測試（Odoo 16 + pgvector）
+    runs-on: ubuntu-latest
+    needs: lint
+    services:
+      db:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 在全新資料庫安裝模組
+        run: |
+          set -o pipefail
+          docker run --rm --network host \
+            -v "${{ github.workspace }}/addons:/mnt/extra-addons" \
+            odoo:16 \
+            odoo -d ci_test -i odoo_ai_assistant \
+              --db_host localhost --db_port 5432 \
+              --db_user odoo --db_password odoo \
+              --without-demo=all --stop-after-init --no-http 2>&1 | tee odoo.log
+
+      - name: 檢查 Odoo log 是否有致命錯誤
+        run: |
+          if grep -E "CRITICAL|Traceback \(most recent call last\)" odoo.log; then
+            echo "::error::Odoo 安裝過程出現錯誤"
+            exit 1
+          fi
+          echo "✓ 模組安裝成功，無致命錯誤"
