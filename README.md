@@ -101,7 +101,9 @@
 ```
 Odoo16_LLM/
 ├── docker-compose.yml              # Odoo + pgvector/pgvector:pg15
-├── Dockerfile                      # odoo:16 + AI 套件 + OCR(tesseract) + sentence-transformers
+├── docker-compose.prod.yml         # 正式環境（拉 image、不在 VM build）
+├── odoo.conf                       # ⭐ 自訂設定：addons_path、workers、gevent、queue_job channels
+├── Dockerfile                      # odoo:16 + AI 套件 + OCR(tesseract) + sentence-transformers + vendor OCA queue_job
 ├── upgrade.ps1                     # ⭐ 一鍵升級 + 重啟
 ├── .devcontainer/devcontainer.json # VS Code Dev Container（容器內開發）
 ├── patch_urllib3.py
@@ -151,6 +153,13 @@ docker compose up -d --build       # 建 image（含 pgvector、OCR、sentence-t
 # 開瀏覽器 http://localhost:8069 建立資料庫，Apps → 搜尋「Taiwan Stock AI」→ Install
 ```
 > 首次使用 RAG 會自動下載多語言 embedding 模型（約 470MB），容器需可連網一次。
+
+> 🔧 **背景任務與即時推送（建置中）**：本專案正導入 **OCA `queue_job`**（背景佇列，避免 LLM 長請求阻塞 HTTP worker）＋ **`bus.bus`**（把產生中的回答即時推回前端）。相關設定集中在 [odoo.conf](odoo.conf)：
+> - `server_wide_modules` 載入 `queue_job`；`workers > 0` 才會啟動 jobrunner 與 gevent worker。
+> - `[queue_job] channels`：依供應商分流 —— `root.cloud`（雲端 API，可多併發）、`root.local_llm:1`（Ollama，一次一個保護 CPU）。
+> - bus 走 gevent worker（`gevent_port = 8072`）；正式環境需由反向代理把 `/websocket` 導到此 port。
+> - ⚠️ 每個 worker 是獨立 process，會各自載入模組與 embedding 模型 → 吃 RAM，CPU-only 單機請依記憶體調 `workers`。
+> - ⚠️ **記憶體上限**：`workers>0` 會啟用 Odoo 的 `RLIMIT_AS`（預設約 2.5GB），torch 的虛擬記憶體會撐爆它而報 `failed to map segment from shared object`。已在 [odoo.conf](odoo.conf) 設 `limit_memory_soft/hard = 0` 解除。
 
 ### 日常啟動 / 停止
 ```powershell

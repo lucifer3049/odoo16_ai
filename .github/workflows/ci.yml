@@ -56,15 +56,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 取得 OCA queue_job（odoo_ai_assistant 的相依模組）
+        run: |
+          git clone --depth 1 --branch 16.0 https://github.com/OCA/queue.git /tmp/oca-queue
+          cp -r /tmp/oca-queue/queue_job addons/queue_job
+
       - name: 在全新資料庫安裝模組
         run: |
           set -o pipefail
           docker run --rm --network host \
+            -e HOST=localhost -e PORT=5432 \
+            -e USER=odoo -e PASSWORD=odoo \
             -v "${{ github.workspace }}/addons:/mnt/extra-addons" \
             odoo:16 \
             odoo -d ci_test -i odoo_ai_assistant \
-              --db_host localhost --db_port 5432 \
-              --db_user odoo --db_password odoo \
               --without-demo=all --stop-after-init --no-http 2>&1 | tee odoo.log
 
       - name: 檢查 Odoo log 是否有致命錯誤

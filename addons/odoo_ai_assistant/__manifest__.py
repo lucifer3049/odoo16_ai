@@ -3,7 +3,7 @@
     'version': '16.0.1.2.0',
     'summary': '台股投資 AI 助理：即時行情、AI 分析、知識問答',
     'license': 'LGPL-3',
-    'depends': ['base', 'web'],
+    'depends': ['base', 'web', 'queue_job'],
     'data': [
         'security/ir.model.access.csv',
         'data/ir_cron.xml',

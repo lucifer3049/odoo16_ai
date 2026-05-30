@@ -18,9 +18,11 @@ services:
       - db
     ports:
       - "8069:8069"
+      - "8072:8072"          # bus（websocket/longpolling）走 gevent worker
     volumes:
       - ./addons:/mnt/extra-addons
       - ./odoo:/var/lib/odoo
+      - ./odoo.conf:/etc/odoo/odoo.conf:ro   # 自訂設定：queue_job channels / workers / gevent
     environment:
       HOST: db
       USER: odoo

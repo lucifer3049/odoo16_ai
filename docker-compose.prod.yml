@@ -25,6 +25,7 @@ services:
       - db
     ports:
       - "8069:8069"
+      - "8072:8072"                      # bus（websocket）；正式環境建議改由反向代理 proxy /websocket
     environment:
       HOST: db
       USER: odoo
@@ -32,6 +33,7 @@ services:
     volumes:
       - odoo_data:/var/lib/odoo          # filestore、sessions（持久化）
       - ./addons:/mnt/extra-addons       # 若用 image 內建 addons 可移除此行
+      - ./odoo.conf:/etc/odoo/odoo.conf:ro   # 自訂設定：queue_job channels / workers / gevent
 
 volumes:
   pg_data:

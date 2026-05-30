@@ -72,9 +72,14 @@ if ([string]::IsNullOrWhiteSpace($Db)) {
 # 注意：直接呼叫 odoo 會繞過官方 entrypoint，HOST/USER/PASSWORD 等環境變數不會被
 # 轉成連線參數，因此必須明確帶上 --db_host 等，否則 Odoo 會去連容器本機 socket 而失敗。
 # 連線值直接取容器內的 $HOST/$USER/$PASSWORD（來源：docker-compose.yml 的 web 服務環境變數），不寫死帳密。
+#
+# --workers=0 --no-http：這是 exec 進「正在運行」的容器內另起的一次性升級程序，
+# 只跑 migration 後即結束。若沿用 odoo.conf 的 workers=4，會進入 prefork 多進程模式
+# 並嘗試 bind 8069/8072，撞上容器主程序已佔的 port → Address already in use。
+# 強制單進程且不啟 HTTP，純粹升級、不碰任何 port。
 Step "升級模組 $Modules（資料庫 $Db）"
 docker compose exec -T web sh -c `
-    "odoo -u $Modules -d $Db --db_host=`$HOST --db_user=`$USER --db_password=`$PASSWORD --stop-after-init"
+    "odoo -u $Modules -d $Db --db_host=`$HOST --db_user=`$USER --db_password=`$PASSWORD --workers=0 --no-http --stop-after-init"
 if ($LASTEXITCODE -ne 0) { throw "模組升級失敗，請查看上方 log。" }
 
 # 5. 重啟 web
